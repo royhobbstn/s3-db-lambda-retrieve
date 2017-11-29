@@ -1,0 +1,27 @@
+{
+  "name": "s3-db-lambda-retrieve",
+  "version": "1.0.0",
+  "description": "Compute expressions from Census data fields stored as JSON in AWS S3",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/royhobbstn/s3-db-lambda-retrieve.git"
+  },
+  "author": "Daniel Trone",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/royhobbstn/s3-db-lambda-retrieve/issues"
+  },
+  "homepage": "https://github.com/royhobbstn/s3-db-lambda-retrieve#readme",
+  "dependencies": {
+    "aws-sdk": "^2.157.0",
+    "bluebird": "^3.5.1",
+    "body-parser": "^1.18.2",
+    "expr-eval": "^1.2.0",
+    "express": "^4.16.2",
+    "serverless-http": "^1.5.2"
+  }
+}
