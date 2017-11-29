@@ -6,25 +6,14 @@ const Parser = require('expr-eval').Parser;
 
 var appRouter = function (app) {
 
-    app.get("/test", function (req, res) {
-        return res.send('test');
-    });
-
-    app.post("/posttest", function (req, res) {
-        return res.send('test');
-    });
-
-    /*****************/
-
-
     app.post("/get-parsed-expression", function (req, res) {
 
         // path, geoids, fields, expression
         const path = req.body.path;
         const geoids = req.body.geoids;
-        const fields = req.body.fields;
         const expression = req.body.expression;
 
+        const fields = Array.from(new Set(getFieldsFromExpression(expression)));
         const sumlev = path.split('/')[1];
         const parser = new Parser();
         const expr = parser.parse(expression.join(""));
@@ -72,5 +61,12 @@ function getS3Data(Key) {
             const object_data = JSON.parse(data.Body.toString('utf-8'));
             return resolve(object_data);
         });
+    });
+}
+
+function getFieldsFromExpression(expression) {
+    //
+    return expression.filter(d => {
+        return d.length > 1;
     });
 }
