@@ -7,6 +7,13 @@ provider:
   runtime: nodejs6.10
   stage: dev
   region: us-west-2
+  iamRoleStatements: # IAM role statements so that services can be accessed in the AWS account
+  - Effect: 'Allow'
+    Action:
+      - 's3:*'
+    Resource:
+      - { "Fn::Join" : ["", ["arn:aws:s3:::", { "Ref" : "ServerlessDeploymentBucket" } ]]}
+      - "arn:aws:s3:::s3db-acs1115/*"
 
 functions:
   app:
