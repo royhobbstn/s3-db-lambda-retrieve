@@ -4,7 +4,7 @@ const AWS = require('aws-sdk');
 const s3 = new AWS.S3();
 const Parser = require('expr-eval').Parser;
 
-var appRouter = function (app) {
+const appRouter = function (app) {
 
     app.post("/get-parsed-expression", function (req, res) {
 

@@ -4,6 +4,7 @@
   "description": "Compute expressions from Census data fields stored as JSON in AWS S3",
   "main": "index.js",
   "scripts": {
+    "start": "nodemon index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {

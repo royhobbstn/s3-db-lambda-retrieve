@@ -13,7 +13,7 @@ app.use(bodyParser.json());
 
 require("./routes/routes.js")(app);
 
-var server = app.listen(8080, function () {
+const server = app.listen(8080, function () {
     console.log("Listening on port %s...", server.address().port);
 });
 
