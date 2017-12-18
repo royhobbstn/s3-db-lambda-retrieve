@@ -4,25 +4,26 @@ const AWS = require('aws-sdk');
 const s3 = new AWS.S3();
 const Parser = require('expr-eval').Parser;
 
-const appRouter = function (app) {
-    
-    app.get("/test", function (req, res) {
+const appRouter = function(app) {
+
+    app.get("/test", function(req, res) {
         return res.send('test');
     });
 
-    app.post("/get-parsed-expression", function (req, res) {
+    app.post("/get-parsed-expression", function(req, res) {
 
         // path, geoids, fields, expression
         const path = req.body.path;
         const geoids = req.body.geoids;
         const expression = req.body.expression;
+        const dataset = req.body.dataset;
 
         const fields = Array.from(new Set(getFieldsFromExpression(expression)));
         const sumlev = path.split('/')[1];
         const parser = new Parser();
         const expr = parser.parse(expression.join(""));
 
-        getS3Data(path + '.json')
+        getS3Data(path + '.json', dataset)
             .then(data => {
                 const evaluated = {};
 
@@ -52,12 +53,12 @@ const appRouter = function (app) {
 
 module.exports = appRouter;
 
-
-function getS3Data(Key) {
-    const Bucket = 's3db-acs1115';
+// TODO.  should grab from a public URL instead, so cloudfront can be involved
+function getS3Data(Key, dataset) {
+    const Bucket = `s3db-${dataset}`;
 
     return new Promise((resolve, reject) => {
-        s3.getObject({ Bucket, Key }, function (err, data) {
+        s3.getObject({ Bucket, Key }, function(err, data) {
             if (err) {
                 console.log(err, err.stack);
                 return reject(err);
