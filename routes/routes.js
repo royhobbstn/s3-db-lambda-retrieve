@@ -45,9 +45,6 @@ const appRouter = function(app) {
                 geoids.forEach((geo_part, i) => {
                     const full_geoid = `${sumlev}00US${geo_part}`;
 
-                    // not all geoids will be in each file.
-                    // if they aren't here, their value will be undefined
-                    // am i really sending ALL geoids to each lambda??
                     if (data[full_geoid] !== undefined) {
                         const obj = {};
                         fields.forEach(field => {
@@ -56,6 +53,9 @@ const appRouter = function(app) {
                         evaluated[full_geoid] = expr.evaluate(obj);
                         evaluated[`${full_geoid}_moe`] = moe_expr.evaluate(obj);
                         evaluated[`${full_geoid}_label`] = data[full_geoid]['NAME'];
+                    }
+                    else {
+                        console.log(`undefined value: ${full_geoid}`);
                     }
                 });
 

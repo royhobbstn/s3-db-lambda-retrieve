@@ -13,6 +13,7 @@ provider:
       - 's3:*'
     Resource:
       - { "Fn::Join" : ["", ["arn:aws:s3:::", { "Ref" : "ServerlessDeploymentBucket" } ]]}
+      - "arn:aws:s3:::s3db-acs1216/*"
       - "arn:aws:s3:::s3db-acs1115/*"
       - "arn:aws:s3:::s3db-acs1014/*"
 
