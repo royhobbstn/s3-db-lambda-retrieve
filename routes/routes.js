@@ -1,8 +1,7 @@
 "use strict";
 
-const AWS = require('aws-sdk');
-const s3 = new AWS.S3();
 const Parser = require('expr-eval').Parser;
+const rp = require('request-promise');
 
 const appRouter = function(app) {
 
@@ -30,14 +29,17 @@ const appRouter = function(app) {
         const expr = parser.parse(expression.join(""));
         const moe_expr = parser.parse(moe_expression.join(""));
 
-        Promise.all([getS3Data('e' + path + '.json', dataset), getS3Data('m' + path + '.json', dataset)])
+        Promise.all([getS3Data(`e${path}.json`, dataset), getS3Data(`m${path}.json`, dataset)])
             .then(response => {
+
+                const estimate = JSON.parse(response[0]);
+                const moe = JSON.parse(response[1]);
 
                 const data = {};
 
                 // recursively combine each geoid key of estimates and moe's
-                Object.keys(response[1]).forEach(key => {
-                    data[key] = Object.assign({}, response[0][key], response[1][key]);
+                Object.keys(estimate).forEach(key => {
+                    data[key] = Object.assign({}, estimate[key], moe[key]);
                 });
 
                 const evaluated = {};
@@ -71,25 +73,28 @@ const appRouter = function(app) {
 
 module.exports = appRouter;
 
-// TODO.  should grab from a public URL instead, so cloudfront can be involved
-function getS3Data(Key, dataset) {
-    const Bucket = `s3db-${dataset}`;
 
-    return new Promise((resolve, reject) => {
-        s3.getObject({ Bucket, Key }, function(err, data) {
-            if (err) {
-                console.log(err, err.stack);
-                return reject(err);
-            }
-            const object_data = JSON.parse(data.Body.toString('utf-8'));
-            return resolve(object_data);
-        });
-    });
+function getS3Data(Key, dataset) {
+    const cdn_url = getUrlFromDataset(dataset);
+    return rp(`https://${cdn_url}/${Key}`);
 }
 
 function getFieldsFromExpression(expression) {
-    //
     return expression.filter(d => {
         return d.length > 1;
     });
+}
+
+function getUrlFromDataset(dataset) {
+    switch (dataset) {
+        case 'acs1014':
+            return 'd2y228x0z69ksn.cloudfront.net';
+        case 'acs1115':
+            return 'd1r5yvgf798u6b.cloudfront.net';
+        case 'acs1216':
+            return 'd23tgl2ix1iyqu.cloudfront.net';
+        default:
+            console.error('unknown dataset');
+            return 'maputopia.com';
+    }
 }
