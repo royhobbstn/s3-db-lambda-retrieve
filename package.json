@@ -2,9 +2,9 @@
   "name": "s3-db-lambda-retrieve",
   "version": "1.0.0",
   "description": "Compute expressions from Census data fields stored as JSON in AWS S3",
-  "main": "index.js",
+  "main": "app.js",
   "scripts": {
-    "start": "nodemon index.js",
+    "start": "nodemon app.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -23,6 +23,7 @@
     "body-parser": "^1.18.2",
     "expr-eval": "^1.2.0",
     "express": "^4.16.2",
+    "papaparse": "^4.3.6",
     "request": "^2.83.0",
     "request-promise": "^4.2.2",
     "serverless-http": "^1.5.2"
