@@ -40,7 +40,6 @@ const appRouter = function(app) {
                 const moe = {};
 
                 // TODO - parsing happening concurrently... not optimal
-                // TODO - remove NAMES logic from here
 
                 // convert each csv to JSON with a key
                 Papa.parse(response[0], {
@@ -82,7 +81,6 @@ const appRouter = function(app) {
                     });
                     evaluated[key] = expr.evaluate(obj);
                     evaluated[`${key}_moe`] = moe_expr.evaluate(obj);
-                    evaluated[`${key}_label`] = data[key]['NAME'];
 
                 });
 
