@@ -10,15 +10,14 @@ const appRouter = function(app) {
         return res.send('test');
     });
 
-    // curl -d '{"path":"059/050/08","geoids":["08031","08005"],"expression":["B19013001"],"moe_expression":["B19013001_moe"],"dataset":"acs1115"}' -H "Content-Type: application/json" -X POST https://d0ahqlmxvi.execute-api.us-west-2.amazonaws.com/dev/get-parsed-expression
+    // curl -d '{"path":"059/050/08","expression":["B19013001"],"moe_expression":["B19013001_moe"],"dataset":"acs1115"}' -H "Content-Type: application/json" -X POST https://d0ahqlmxvi.execute-api.us-west-2.amazonaws.com/dev/get-parsed-expression
 
-    // curl -d '{"path":"059/050/55","geoids":["55087","55009"],"expression":["B19013001"],"moe_expression":["B19013001_moe"],"dataset":"acs1216"}' -H "Content-Type: application/json" -X POST http://localhost:8080/get-parsed-expression
+    // curl -d '{"path":"059/050/55","expression":["B19013001"],"moe_expression":["B19013001_moe"],"dataset":"acs1216"}' -H "Content-Type: application/json" -X POST http://localhost:8080/get-parsed-expression
 
     app.post("/get-parsed-expression", function(req, res) {
 
         // path, geoids, fields, expression
         const path = req.body.path;
-        // const geoids = req.body.geoids; // TODO geoids not necessary here?
         const expression = req.body.expression;
         const moe_expression = req.body.moe_expression;
         const dataset = req.body.dataset;
