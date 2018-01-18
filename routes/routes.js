@@ -3,6 +3,8 @@
 const Parser = require('expr-eval').Parser;
 const rp = require('request-promise');
 const Papa = require('papaparse');
+const uuidv4 = require('uuid/v4');
+const present = require('present');
 
 const appRouter = function(app) {
 
@@ -10,65 +12,51 @@ const appRouter = function(app) {
         return res.send('test');
     });
 
-    // curl -d '{"path":"059/050/08","expression":["B19013001"],"moe_expression":["B19013001_moe"],"dataset":"acs1115"}' -H "Content-Type: application/json" -X POST https://d0ahqlmxvi.execute-api.us-west-2.amazonaws.com/dev/get-parsed-expression
+    // curl -d '{"path":"e059/050/08","expression":["B19013001"],"dataset":"acs1115"}' -H "Content-Type: application/json" -X POST https://d0ahqlmxvi.execute-api.us-west-2.amazonaws.com/dev/get-parsed-expression
 
-    // curl -d '{"path":"059/050/55","expression":["B19013001"],"moe_expression":["B19013001_moe"],"dataset":"acs1216"}' -H "Content-Type: application/json" -X POST http://localhost:8080/get-parsed-expression
+    // curl -d '{"path":"e059/050/55","expression":["B19013001"],"dataset":"acs1216"}' -H "Content-Type: application/json" -X POST http://localhost:8080/get-parsed-expression
+
+    // curl -d '{"path":"m059/050/55", "expression":["B19013001_moe"],"dataset":"acs1216"}' -H "Content-Type: application/json" -X POST http://localhost:8080/get-parsed-expression
 
     app.post("/get-parsed-expression", function(req, res) {
+        const uuid = uuidv4();
+        const start_time = present();
 
-        // path, geoids, fields, expression
         const path = req.body.path;
         const expression = req.body.expression;
-        const moe_expression = req.body.moe_expression;
         const dataset = req.body.dataset;
 
-        const est_fields = Array.from(new Set(getFieldsFromExpression(expression)));
-        const moe_fields = Array.from(new Set(getFieldsFromExpression(moe_expression)));
+        console.log('\n' + uuid, path, expression, dataset);
+        console.log(uuid, 0, 'starting function');
 
-        const fields = [...est_fields, ...moe_fields];
+        const fields = Array.from(new Set(getFieldsFromExpression(expression)));
 
-        // const sumlev = path.split('/')[1]; // TODO sumlev not necessary here?
         const parser = new Parser();
         const expr = parser.parse(expression.join(""));
-        const moe_expr = parser.parse(moe_expression.join(""));
 
-        Promise.all([getS3Data(`e${path}.csv`, dataset), getS3Data(`m${path}.csv`, dataset)])
+        // choose whether to send expression or moe_expression
+        const est_or_moe = path.slice(0, 1);
+
+        console.log(uuid, present() - start_time, 'fetching s3 data');
+        getS3Data(`${path}.csv`, dataset)
             .then(response => {
 
-                const estimate = {};
-                const moe = {};
-
-                // TODO - parsing happening concurrently... not optimal
-
-                // convert each csv to JSON with a key
-                Papa.parse(response[0], {
-                    header: true,
-                    skipEmptyLines: true,
-                    step: function(results, parser) {
-                        estimate[results.data[0]['GEOID']] = results.data[0];
-                    },
-                    complete: function() {
-                        console.log('finished est');
-                    }
-                });
-
-                Papa.parse(response[1], {
-                    header: true,
-                    skipEmptyLines: true,
-                    step: function(results, parser) {
-                        moe[results.data[0]['GEOID']] = results.data[0];
-                    },
-                    complete: function() {
-                        console.log('finished moe');
-                    }
-                });
+                console.log(uuid, present() - start_time, 'retrieve s3 data');
 
                 const data = {};
 
-                // recursively combine each geoid key of estimates and moe's
-                Object.keys(estimate).forEach(key => {
-                    data[key] = Object.assign({}, estimate[key], moe[key]);
+                // convert each csv to JSON with a key
+                Papa.parse(response, {
+                    header: true,
+                    skipEmptyLines: true,
+                    step: function(results, parser) {
+                        data[results.data[0]['GEOID']] = results.data[0];
+                    },
+                    complete: function() {
+                        console.log(uuid, present() - start_time, 'parsed s3 data');
+                    }
                 });
+
 
                 const evaluated = {};
 
@@ -78,10 +66,17 @@ const appRouter = function(app) {
                     fields.forEach(field => {
                         obj[field] = parseFloat(data[key][field]);
                     });
-                    evaluated[key] = expr.evaluate(obj);
-                    evaluated[`${key}_moe`] = moe_expr.evaluate(obj);
+
+                    if (est_or_moe === 'e') {
+                        evaluated[key] = expr.evaluate(obj);
+                    }
+                    else {
+                        evaluated[`${key}_moe`] = expr.evaluate(obj);
+                    }
 
                 });
+
+                console.log(uuid, present() - start_time, 'sending data.  ending function');
 
                 res.json(evaluated);
             })
