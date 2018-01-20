@@ -3,7 +3,6 @@
 const Parser = require('expr-eval').Parser;
 const rp = require('request-promise');
 const Papa = require('papaparse');
-const uuidv4 = require('uuid/v4');
 const present = require('present');
 
 const appRouter = function(app) {
@@ -19,15 +18,16 @@ const appRouter = function(app) {
     // curl -d '{"path":"m059/050/55", "expression":["B19013001_moe"],"dataset":"acs1216"}' -H "Content-Type: application/json" -X POST http://localhost:8080/get-parsed-expression
 
     app.post("/get-parsed-expression", function(req, res) {
-        const uuid = uuidv4();
         const start_time = present();
 
         const path = req.body.path;
         const expression = req.body.expression;
         const dataset = req.body.dataset;
 
-        console.log('\n' + uuid, path, expression, dataset);
-        console.log(uuid, 0, 'starting function');
+        console.log({});
+        console.log({ path, expression, dataset });
+
+        console.log({ time: 0, msg: 'start' });
 
         const fields = Array.from(new Set(getFieldsFromExpression(expression)));
 
@@ -37,11 +37,12 @@ const appRouter = function(app) {
         // choose whether to send expression or moe_expression
         const est_or_moe = path.slice(0, 1);
 
-        console.log(uuid, present() - start_time, 'fetching s3 data');
+        console.log({ time: getTime(start_time), msg: 'fetching s3 data' });
+
         getS3Data(`${path}.csv`, dataset)
             .then(response => {
 
-                console.log(uuid, present() - start_time, 'retrieve s3 data');
+                console.log({ time: getTime(start_time), msg: 'retrieve s3 data' });
 
                 const data = {};
 
@@ -53,7 +54,7 @@ const appRouter = function(app) {
                         data[results.data[0]['GEOID']] = results.data[0];
                     },
                     complete: function() {
-                        console.log(uuid, present() - start_time, 'parsed s3 data');
+                        console.log({ time: getTime(start_time), msg: 'parsed s3 data' });
                     }
                 });
 
@@ -76,7 +77,7 @@ const appRouter = function(app) {
 
                 });
 
-                console.log(uuid, present() - start_time, 'sending data.  ending function');
+                console.log({ time: getTime(start_time), msg: 'sending data' });
 
                 res.json(evaluated);
             })
@@ -114,4 +115,8 @@ function getUrlFromDataset(dataset) {
             console.error('unknown dataset');
             return 'maputopia.com';
     }
+}
+
+function getTime(start_time) {
+    return (present() - start_time).toFixed(3);
 }
