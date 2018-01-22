@@ -27,6 +27,10 @@ functions:
           method: post
           cors: true
       - http:
+          path: fast-retrieve
+          method: post
+          cors: true
+      - http:
           path: test
           method: get
           cors: true
