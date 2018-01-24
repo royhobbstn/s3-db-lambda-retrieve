@@ -8,24 +8,11 @@ provider:
   stage: dev
   region: us-west-2
   timeout: 30
-  iamRoleStatements: # IAM role statements so that services can be accessed in the AWS account
-  - Effect: 'Allow'
-    Action:
-      - 's3:*'
-    Resource:
-      - { "Fn::Join" : ["", ["arn:aws:s3:::", { "Ref" : "ServerlessDeploymentBucket" } ]]}
-      - "arn:aws:s3:::s3db-acs1216/*"
-      - "arn:aws:s3:::s3db-acs1115/*"
-      - "arn:aws:s3:::s3db-acs1014/*"
 
 functions:
   app:
     handler: app.handler
     events:
-      - http:
-          path: get-parsed-expression
-          method: post
-          cors: true
       - http:
           path: fast-retrieve
           method: post

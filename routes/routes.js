@@ -1,7 +1,6 @@
 "use strict";
 
 const Parser = require('expr-eval').Parser;
-const rp = require('request-promise');
 const Papa = require('papaparse');
 const present = require('present');
 const zlib = require('zlib');
@@ -41,9 +40,7 @@ const appRouter = function(app) {
 
         console.log({ time: getTime(start_time), msg: 'fetching s3 data' });
 
-
         const url = getUrlFromDataset(dataset);
-
 
         const gunzip = zlib.createGunzip();
 
@@ -75,10 +72,9 @@ const appRouter = function(app) {
 
                         const obj = {};
                         fields.forEach(field => {
-                            // TODO is this attempted to parsefloat geoid?
+                            // TODO is this attempting to parsefloat geoid?
                             obj[field] = parseFloat(data[key][field]);
                         });
-
 
 
                         if (est_or_moe === 'e') {
@@ -92,7 +88,6 @@ const appRouter = function(app) {
 
                     res.write(JSON.stringify(evaluated));
 
-
                 },
                 complete: function(response) {
                     console.log({ time: getTime(start_time), msg: 'sent s3 data' });
@@ -100,99 +95,7 @@ const appRouter = function(app) {
                 }
             });
 
-
         });
-
-
-    });
-
-
-
-    app.post("/get-parsed-expression", function(req, res) {
-        const start_time = present();
-
-        const path = req.body.path;
-        const expression = req.body.expression;
-        const dataset = req.body.dataset;
-
-        console.log({});
-        console.log({ path, expression, dataset });
-
-        console.log({ time: 0, msg: 'start' });
-
-        const fields = Array.from(new Set(getFieldsFromExpression(expression)));
-
-        const parser = new Parser();
-        const expr = parser.parse(expression.join(""));
-
-        // choose whether to send expression or moe_expression
-        const est_or_moe = path.slice(0, 1);
-
-        console.log({ time: getTime(start_time), msg: 'fetching s3 data' });
-
-        getS3Data(`${path}.csv`, dataset)
-            .then(response_gzip => {
-
-                console.log({ time: getTime(start_time), msg: 'retrieve s3 data' });
-
-                zlib.gunzip(response_gzip, function(err, dezipped) {
-                    if (err) {
-                        console.log(err);
-                    }
-
-                    const response = dezipped.toString();
-
-                    console.log({ time: getTime(start_time), msg: 'unzipped s3 data' });
-
-                    const data = {};
-
-                    // convert each csv to JSON with a key
-                    Papa.parse(response, {
-                        header: true,
-                        skipEmptyLines: true,
-                        fastMode: true,
-                        step: function(results, parser) {
-                            data[results.data[0]['GEOID']] = results.data[0];
-                        },
-                        complete: function(response) {
-                            // response.data.forEach(results => {
-                            //     data[results['GEOID']] = results;
-                            // });
-
-                            console.log({ time: getTime(start_time), msg: 'parsed s3 data' });
-                        }
-                    });
-
-
-                    const evaluated = {};
-
-                    Object.keys(data).forEach((key, i) => {
-
-                        const obj = {};
-                        fields.forEach(field => {
-                            obj[field] = parseFloat(data[key][field]);
-                        });
-
-                        if (est_or_moe === 'e') {
-                            evaluated[key] = expr.evaluate(obj);
-                        }
-                        else {
-                            evaluated[`${key}_moe`] = expr.evaluate(obj);
-                        }
-
-                    });
-
-                    console.log({ time: getTime(start_time), msg: 'sending data' });
-
-                    return res.json(evaluated);
-
-                });
-
-
-            })
-            .catch(err => {
-                return res.status(500).send(err);
-            });
 
     });
 
@@ -202,12 +105,6 @@ module.exports = appRouter;
 
 
 
-
-
-function getS3Data(Key, dataset) {
-    const url = getUrlFromDataset(dataset);
-    return rp(`https://${url}/${Key}`, { encoding: null });
-}
 
 function getFieldsFromExpression(expression) {
     return expression.filter(d => {
