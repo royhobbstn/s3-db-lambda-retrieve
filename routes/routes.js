@@ -6,8 +6,6 @@ const Papa = require('papaparse');
 const present = require('present');
 const zlib = require('zlib');
 const https = require('https');
-// const fs = require('fs');
-// const csv = require('csv');
 
 const appRouter = function(app) {
 
@@ -15,13 +13,13 @@ const appRouter = function(app) {
         return res.send('test');
     });
 
-    // curl -d '{"path":"e059/050/08","expression":["B19013001"],"dataset":"acs1115"}' -H "Content-Type: application/json" -X POST https://d0ahqlmxvi.execute-api.us-west-2.amazonaws.com/dev/get-parsed-expression
+    // curl -d '{"path":"e059/050/08","expression":["B19013001"],"dataset":"acs1115"}' -H "Content-Type: application/json" -X POST https://d0ahqlmxvi.execute-api.us-west-2.amazonaws.com/dev/fast-retrieve
 
-    // curl -d '{"path":"e059/050/55","expression":["B19013001"],"dataset":"acs1216"}' -H "Content-Type: application/json" -X POST http://localhost:8080/get-parsed-expression
+    // curl -d '{"path":"e059/050/08","expression":["B19013001"],"dataset":"acs1115"}' -H "Content-Type: application/json" -X POST http://localhost:8080/fast-retrieve
 
-    // curl -d '{"path":"m059/050/55", "expression":["B19013001_moe"],"dataset":"acs1216"}' -H "Content-Type: application/json" -X POST http://localhost:8080/get-parsed-expression
 
     app.post("/fast-retrieve", function(req, res) {
+
         const start_time = present();
 
         const path = req.body.path;
@@ -92,8 +90,9 @@ const appRouter = function(app) {
 
                     });
 
-
                     res.write(JSON.stringify(evaluated));
+
+
                 },
                 complete: function(response) {
                     console.log({ time: getTime(start_time), msg: 'sent s3 data' });

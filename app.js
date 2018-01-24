@@ -2,7 +2,9 @@ const serverless = require('serverless-http');
 const express = require("express");
 const app = express();
 const bodyParser = require('body-parser');
+const compression = require('compression');
 
+app.use(compression());
 
 app.use(function(req, res, next) {
     res.header("Access-Control-Allow-Origin", "*");
@@ -10,7 +12,10 @@ app.use(function(req, res, next) {
     next();
 });
 
+
 app.use(bodyParser.json());
+
+
 
 require("./routes/routes.js")(app);
 
