@@ -6,7 +6,48 @@ const present = require('present');
 const zlib = require('zlib');
 const https = require('https');
 
+
+let path = require('path');
+
+let messages = [
+    { text: 'hey', lang: 'english' },
+    { text: 'isänme', lang: 'tatar' },
+    { text: 'hej', lang: 'swedish' }
+];
+
+let ProtoBuf = require('protobufjs');
+let builder = ProtoBuf.loadProtoFile(path.join(__dirname, 'message.proto'));
+let Message = builder.build('Message');
+
+
 const appRouter = function(app) {
+
+    app.get('/api/messages', (req, res, next) => {
+        let msg = new Message(messages[Math.round(Math.random() * 2)]);
+        console.log('Encode and decode: ',
+            Message.decode(msg.encode().toBuffer()));
+        console.log('Buffer we are sending: ', msg.encode().toBuffer());
+        // res.end(msg.encode().toBuffer(), 'binary') // alternative
+        res.send(msg.encode().toBuffer());
+        // res.end(Buffer.from(msg.toArrayBuffer()), 'binary') // alternative
+    });
+
+    app.post('/api/messages', (req, res, next) => {
+        if (req.raw) {
+            try {
+                // Decode the Message
+                var msg = Message.decode(req.raw);
+                console.log('Received "%s" in %s', msg.text, msg.lang);
+            }
+            catch (err) {
+                console.log('Processing failed:', err);
+                next(err);
+            }
+        }
+        else {
+            console.log("Not binary data");
+        }
+    });
 
     app.get("/test", function(req, res) {
         return res.send('test');
@@ -16,6 +57,11 @@ const appRouter = function(app) {
 
     // curl -d '{"path":"e059/050/08","expression":["B19013001"],"dataset":"acs1115"}' -H "Content-Type: application/json" -X POST http://localhost:8080/fast-retrieve
 
+    app.post('/protobuf', function(req, res) {
+
+
+        // 
+    });
 
     app.post("/fast-retrieve", function(req, res) {
 
