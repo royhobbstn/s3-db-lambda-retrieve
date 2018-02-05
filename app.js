@@ -6,30 +6,31 @@ const bodyParser = require('body-parser');
 app.use(function(req, res, next) {
     res.header("Access-Control-Allow-Origin", "*");
     res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+    res.header('Access-Control-Max-Age', 60 * 60 * 24);
     next();
 });
 
-app.use(function(req, res, next) {
-    //
-    if (!req.is('application/octet-stream')) {
-        return next();
-    }
+// app.use(function(req, res, next) {
+            //     //
+            //     if (!req.is('application/octet-stream')) {
+            //         return next();
+            //     }
 
-    var data = []; // List of Buffer objects
-    req.on('data', function(chunk) {
-        data.push(chunk); // Append Buffer object
-    });
+            //     var data = []; // List of Buffer objects
+            //     req.on('data', function(chunk) {
+            //         data.push(chunk); // Append Buffer object
+            //     });
 
-    req.on('end', function() {
-        if (data.length <= 0) {
-            return next();
-        }
-        data = Buffer.concat(data); // Make one large Buffer of it
-        console.log('Received buffer', data);
-        req.raw = data;
-        next();
-    });
-});
+            //     req.on('end', function() {
+            //         if (data.length <= 0) {
+            //             return next();
+            //         }
+            //         data = Buffer.concat(data); // Make one large Buffer of it
+            //         console.log('Received buffer', data);
+            //         req.raw = data;
+            //         next();
+            //     });
+            // });
 
 
 app.use(bodyParser.json());

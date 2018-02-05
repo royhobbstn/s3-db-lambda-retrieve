@@ -18,6 +18,10 @@ functions:
           method: post
           cors: true
       - http:
+          path: zip-retrieve
+          method: post
+          cors: true
+      - http:
           path: pbf
           method: post
           cors: true

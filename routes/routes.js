@@ -134,6 +134,88 @@ const appRouter = function(app) {
 
     // curl -d '{"path":"e059/050/08","expression":["B19013001"],"dataset":"acs1115"}' -H "Content-Type: application/json" -X POST http://localhost:8080/fast-retrieve
 
+    app.post("/zip-retrieve", function(req, res) {
+
+        const start_time = present();
+
+        const path = req.body.path;
+        const expression = req.body.expression;
+        const dataset = req.body.dataset;
+
+        console.log({});
+        console.log({ path, expression, dataset });
+
+        console.log({ time: 0, msg: 'start' });
+
+        const fields = Array.from(new Set(getFieldsFromExpression(expression)));
+
+        const parser = new Parser();
+        const expr = parser.parse(expression.join(""));
+
+        // choose whether to send expression or moe_expression
+        const est_or_moe = path.slice(0, 1);
+
+        console.log({ time: getTime(start_time), msg: 'fetching s3 data' });
+
+        const url = getUrlFromDataset(dataset);
+
+        const gunzip = zlib.createGunzip();
+
+
+        https.get(`https://${url}/${path}.csv`, function(response) {
+
+            const data = {};
+
+            Papa.parse(response.pipe(gunzip), {
+                header: true,
+                skipEmptyLines: true,
+                fastMode: true,
+                complete: function(response) {
+                    response.data.forEach(results => {
+                        data[results['GEOID']] = results;
+                    });
+
+                    console.log({ time: getTime(start_time), msg: 'parsed s3 data' });
+
+                    const evaluated = {};
+
+                    Object.keys(data).forEach((key, i) => {
+
+                        const obj = {};
+                        fields.forEach(field => {
+                            obj[field] = parseFloat(data[key][field]);
+                        });
+
+                        if (est_or_moe === 'e') {
+                            evaluated[key] = expr.evaluate(obj);
+                        }
+                        else {
+                            evaluated[`${key}_moe`] = expr.evaluate(obj);
+                        }
+
+                    });
+
+                    var buf = new Buffer(JSON.stringify(evaluated), 'utf-8');
+                    zlib.gzip(buf, function(err, result) {
+                        if (err) {
+                            console.log(err);
+                        }
+                        console.log({ time: getTime(start_time), msg: 'sending data' });
+                        res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip' });
+                        res.end(result);
+                    });
+
+
+                }
+            });
+
+
+
+
+        });
+
+
+    });
 
     app.post("/fast-retrieve", function(req, res) {
 

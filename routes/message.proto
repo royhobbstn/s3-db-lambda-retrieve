@@ -11,3 +11,7 @@ message Pair {
 message Dictionary {
    repeated Pair pairs = 1;
 }
+
+message Config { 
+    map<string, string> biyun_levels = 1;
+}
