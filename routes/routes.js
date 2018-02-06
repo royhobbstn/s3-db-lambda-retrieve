@@ -15,15 +15,15 @@ const appRouter = function(app) {
     });
 
 
-    // https://79a58373baf9444b9a578583c17ba4be.vfs.cloud9.us-west-2.amazonaws.com
+    // https://d0ahqlmxvi.execute-api.us-west-2.amazonaws.com/dev
     // /retrieve?path=e002/140/89&expression=%5B%22B01001001%22%5D&dataset=acs1216
 
     app.get("/retrieve", function(req, res) {
 
         const start_time = present();
 
-        const path = req.query.path;
-        const expression = JSON.parse(req.query.expression);
+        const path = decodeURIComponent(req.query.path);
+        const expression = JSON.parse(decodeURIComponent(req.query.expression));
         const dataset = req.query.dataset;
 
         console.log({});
