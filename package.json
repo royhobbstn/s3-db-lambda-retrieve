@@ -21,6 +21,8 @@
     "expr-eval": "^1.2.0",
     "express": "^4.16.2",
     "present": "^1.0.0",
+    "request": "^2.83.0",
+    "request-promise": "^4.2.2",
     "serverless-http": "^1.5.2"
   }
 }
