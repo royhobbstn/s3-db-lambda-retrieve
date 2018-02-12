@@ -4,6 +4,9 @@ const Parser = require('expr-eval').Parser;
 const present = require('present');
 const rp = require('request-promise');
 
+// path sent in param does not need to include attribute - can derive from expression
+// don't need to differentiate between est and moe anymore
+
 
 const appRouter = function(app) {
 
@@ -12,18 +15,19 @@ const appRouter = function(app) {
     });
 
     // https://d0ahqlmxvi.execute-api.us-west-2.amazonaws.com/dev
-    // /retrieve?path=e002/140/89&expression=%5B%22B01001001%22%5D&dataset=acs1216
+    // /retrieve?sumlev=050&cluster=0&expression=%5B%22B19013001%22%5D&dataset=acs1115
 
     app.get("/retrieve", function(req, res) {
 
         const start_time = present();
 
-        const path = decodeURIComponent(req.query.path);
+        const sumlev = req.query.sumlev;
+        const cluster = req.query.cluster;
         const expression = JSON.parse(decodeURIComponent(req.query.expression));
         const dataset = req.query.dataset;
 
         console.log({});
-        console.log({ path, expression, dataset });
+        console.log({ sumlev, cluster, expression, dataset });
 
         console.log({ time: 0, msg: 'start' });
 
@@ -32,45 +36,42 @@ const appRouter = function(app) {
         const parser = new Parser();
         const expr = parser.parse(expression.join(""));
 
-        // choose whether to send expression or moe_expression
-        const est_or_moe = path.slice(0, 1);
-
         console.log({ time: getTime(start_time), msg: 'fetching s3 data' });
 
         const url = getUrlFromDataset(dataset);
 
-        rp({
-            method: 'get',
-            uri: `https://${url}/${path}.json`,
-            headers: {
-                'Accept-Encoding': 'gzip',
-            },
-            gzip: true,
-            json: true,
-            fullResponse: false
-        }).then(data => {
-            //
-            console.log({ time: getTime(start_time), msg: 'received and parsed s3 data' });
+        console.log({ time: getTime(start_time), msg: 'fetching url: ' + url });
+
+        const datas = fields.map(field => {
+            return rp({
+                method: 'get',
+                uri: `https://${url}/${field}/${sumlev}/${cluster}.json`,
+                headers: {
+                    'Accept-Encoding': 'gzip',
+                },
+                gzip: true,
+                json: true,
+                fullResponse: false
+            });
+        });
+
+        Promise.all(datas).then(data => {
+            // TODO shortcut when just one field
+
+            console.log({ time: getTime(start_time), msg: 'received all data' });
 
             const evaluated = {};
 
-            Object.keys(data).forEach((key, i) => {
-
+            Object.keys(data[0]).forEach(geoid => {
                 const obj = {};
-                fields.forEach(field => {
-                    obj[field] = data[key][field];
+                fields.forEach((field, i) => {
+                    obj[field] = data[i][geoid];
                 });
-
-                if (est_or_moe === 'e') {
-                    evaluated[key] = expr.evaluate(obj);
-                }
-                else {
-                    evaluated[`${key}_moe`] = expr.evaluate(obj);
-                }
+                evaluated[geoid] = expr.evaluate(obj);
 
             });
 
-            console.log({ time: getTime(start_time), msg: 'sending data' });
+            console.log({ time: getTime(start_time), msg: 'parsed / sending data' });
 
             return res.json(evaluated);
             //
