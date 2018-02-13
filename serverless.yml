@@ -7,7 +7,7 @@ provider:
   runtime: nodejs6.10
   stage: dev
   region: us-west-2
-  timeout: 30
+  timeout: 10
 
 functions:
   app:
@@ -21,3 +21,7 @@ functions:
           path: test
           method: get
           cors: true
+          
+plugins:
+  - serverless-offline
+  
