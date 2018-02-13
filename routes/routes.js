@@ -18,16 +18,20 @@ const appRouter = function(app) {
     // /retrieve?sumlev=050&cluster=0&expression=%5B%22B19013001%22%5D&dataset=acs1115
 
     app.get("/retrieve", function(req, res) {
-
         const start_time = present();
 
-        const sumlev = req.query.sumlev;
-        const cluster = req.query.cluster;
-        const expression = JSON.parse(decodeURIComponent(req.query.expression));
-        const dataset = req.query.dataset;
+        const expression = req.query.expression ? JSON.parse(decodeURIComponent(req.query.expression)) : ["(", "(", "B01001007", "+", "B01001008", "+", "B01001009", "+", "B01001010", "+", "B01001031", "+", "B01001032", "+", "B01001033", "+", "B01001034", ")", "/", "B01001001", ")"];
+        const dataset = req.query.dataset || 'acs1115';
+        const sumlev = req.query.sumlev || '050';
+        const clusters = req.query.clusters ? JSON.parse(decodeURIComponent(req.query.clusters)) : ["0"];
+
+        // const expression = req.query.expression ? JSON.parse(decodeURIComponent(req.query.expression)) : ["B19013001"];
+        // const dataset = req.query.dataset || 'acs1115';
+        // const sumlev = req.query.sumlev || '150';
+        // const clusters = req.query.clusters ? JSON.parse(decodeURIComponent(req.query.clusters)) : ["0", "1", "2", "3"];
 
         console.log({});
-        console.log({ sumlev, cluster, expression, dataset });
+        console.log({ sumlev, clusters, expression, dataset });
 
         console.log({ time: 0, msg: 'start' });
 
@@ -42,30 +46,62 @@ const appRouter = function(app) {
 
         console.log({ time: getTime(start_time), msg: 'fetching url: ' + url });
 
-        const datas = fields.map(field => {
-            return rp({
-                method: 'get',
-                uri: `https://${url}/${field}/${sumlev}/${cluster}.json`,
-                headers: {
-                    'Accept-Encoding': 'gzip',
-                },
-                gzip: true,
-                json: true,
-                fullResponse: false
+        const datas = [];
+        const fields_key = [];
+
+        clusters.forEach(cluster => {
+            fields.forEach(field => {
+                fields_key.push(field);
+                datas.push(rp({
+                    method: 'get',
+                    uri: `https://${url}/${field}/${sumlev}/${cluster}_.json`,
+                    headers: {
+                        'Accept-Encoding': 'gzip',
+                    },
+                    gzip: true,
+                    json: true,
+                    fullResponse: false
+                }));
             });
         });
 
-        Promise.all(datas).then(data => {
-            // TODO shortcut when just one field
 
+        Promise.all(datas).then(data => {
             console.log({ time: getTime(start_time), msg: 'received all data' });
+
+            // shortcut when just one field
+            if (clusters.length === 1 && fields.length === 1) {
+                console.log({ time: getTime(start_time), msg: 'shortcut: sending data' });
+                return data[0];
+            }
+
+            // combine clusters
+            const combined_data = [];
+
+            // create a data structure where combined_data indexes match fields indexes
+            fields_key.forEach((field_key, field_key_index) => {
+                fields.forEach((field, i) => {
+                    if (field_key === field) {
+                        if (combined_data[i]) {
+                            combined_data[i] = Object.assign({}, combined_data[i], data[field_key_index]);
+                        }
+                        else {
+                            combined_data[i] = data[field_key_index];
+                        }
+                    }
+                });
+            });
+
 
             const evaluated = {};
 
-            Object.keys(data[0]).forEach(geoid => {
+            // combined_data[0] index is arbitrary.  goal is just to loop through all geoids
+            // create a mini object where each object key is a field name.
+            // then solve the expression, and record the result in a master 'evaluated' object
+            Object.keys(combined_data[0]).forEach(geoid => {
                 const obj = {};
                 fields.forEach((field, i) => {
-                    obj[field] = data[i][geoid];
+                    obj[field] = combined_data[i][geoid];
                 });
                 evaluated[geoid] = expr.evaluate(obj);
 
