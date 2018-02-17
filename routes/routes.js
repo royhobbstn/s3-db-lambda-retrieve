@@ -54,7 +54,7 @@ const appRouter = function(app) {
         fields_key.push(field);
         datas.push(rp({
           method: 'get',
-          uri: `https://${url}/${field}/${sumlev}/${cluster}_.json`,
+          uri: `https://${url}/${field}/${sumlev}/${cluster}.json`,
           headers: {
             'Accept-Encoding': 'gzip',
           },
