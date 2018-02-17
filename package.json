@@ -24,5 +24,8 @@
     "request": "^2.83.0",
     "request-promise": "^4.2.2",
     "serverless-http": "^1.5.2"
+  },
+  "devDependencies": {
+    "serverless-offline": "^3.17.0"
   }
 }
