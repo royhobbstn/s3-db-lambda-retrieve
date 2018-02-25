@@ -24,4 +24,8 @@ functions:
           
 plugins:
   - serverless-offline
-  
+  - serverless-content-encoding
+
+custom:
+  contentEncoding:
+    minimumCompressionSize: 1024 # Minimum body size required for compression in bytes
