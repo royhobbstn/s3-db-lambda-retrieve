@@ -9,7 +9,7 @@ app.use(function(req, res, next) {
 });
 
 
-require("./routes/routes.js")(app);
+require("./routes.js")(app);
 
 const server = app.listen(8080, function() {
   console.log("Listening on port %s...", server.address().port);
