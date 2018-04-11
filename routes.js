@@ -3,6 +3,7 @@
 const Parser = require('expr-eval').Parser;
 const present = require('present');
 const rp = require('request-promise');
+const { client } = require('./redis.js');
 const { themes } = require('./themes');
 
 // path sent in param does not need to include attribute - can derive from expression
@@ -12,7 +13,20 @@ const { themes } = require('./themes');
 const appRouter = function(app) {
 
   app.get("/test", function(req, res) {
-    return res.send('test');
+
+    client.set("key", "val");
+
+    client.get("key", function(err, reply) {
+      if (err) {
+        return res.json({ err: 'error' });
+      }
+
+      // reply is null when the key is missing
+      console.log(reply);
+      return res.send(reply);
+    });
+
+
   });
 
   // https://d0ahqlmxvi.execute-api.us-west-2.amazonaws.com/dev

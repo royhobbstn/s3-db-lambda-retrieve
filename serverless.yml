@@ -12,6 +12,8 @@ provider:
 functions:
   app:
     handler: app.handler
+    environment:
+      REDIS_PWRD: ${opt:redis}
     events:
       - http:
           path: retrieve
