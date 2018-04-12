@@ -48,185 +48,64 @@ const appRouter = function(app) {
 
     console.log({ time: 0, msg: 'start' });
 
-    const fields = Array.from(new Set(getFieldsFromExpression(expression)));
-
-    const parser = new Parser();
-    const expr = parser.parse(expression.join(""));
-
-    console.log({ time: getTime(start_time), msg: 'fetching s3 data' });
-
-    const url = getUrlFromDataset(dataset);
-
-    console.log({ time: getTime(start_time), msg: 'fetching url: ' + url });
-
-    const datas = [];
-    const fields_key = [];
-
-
-    fields.forEach(field => {
-      fields_key.push(field);
-      datas.push(rp({
-        method: 'get',
-        uri: `https://${url}/${field}/${sumlev}.json`,
-        headers: {
-          'Accept-Encoding': 'gzip',
-        },
-        gzip: true,
-        json: true,
-        fullResponse: false
-      }));
+    // redis key will be dataset:theme:sumlev:cluster
+    const redis_keys = clusters.map(cluster => {
+      return `${dataset}:${theme}:${sumlev}:${cluster}`;
     });
 
-    console.log(fields_key);
+    // query redis for needed keys
+    client.mget(redis_keys, function(err, reply) {
+      if (err) {
+        console.log(err);
+        return res.json({ err: 'error' });
+      }
 
-    const geo_year = getGeoYearFromDataset(dataset);
-    const geog = getGeographyLevelFromSumlev(sumlev);
+      // reply is null when the key is missing
+      console.log(reply);
 
-    const geoid_lookup = rp({
-      method: 'get',
-      uri: `https://s3-us-west-2.amazonaws.com/geo-metadata/clusters_${geo_year}_${geog}.json`,
-      headers: {
-        'Accept-Encoding': 'gzip',
-      },
-      gzip: true,
-      json: true,
-      fullResponse: false
-    });
-
-    Promise.all([geoid_lookup, ...datas]).then(data => {
-      console.log({ time: getTime(start_time), msg: 'received all data' });
-
-      const geoid_lookup = data.shift();
-
-      // TODO geoid_lookup would be better as { CLUSTER: [ARRAY OF GEOIDS] }.
-      // in the meantime, we'll fake it by creating it here
-
-      console.log({ time: getTime(start_time), msg: 'needless compute start' });
-      const clusters_obj = {};
-
-      Object.keys(geoid_lookup).forEach(geoid => {
-        const cluster = geoid_lookup[geoid];
-        if (!clusters_obj[cluster]) {
-          clusters_obj[cluster] = [];
-        }
-        clusters_obj[cluster].push(geoid);
-      });
-      console.log({ time: getTime(start_time), msg: 'needless compute end' });
-
-
-      // we don't really need to get only a few clusters at a time.
-      // we can calculate all data, cluster it, save it to redis
-      // then pick just the initial selected clusters
-
-      // combine clusters
-      const combined_data = [];
-
-      // create a data structure where combined_data indexes match fields indexes
-      fields_key.forEach((field_key, field_key_index) => {
-        fields.forEach((field, i) => {
-          if (field_key === field) {
-            if (combined_data[i]) {
-              combined_data[i] = Object.assign({}, combined_data[i], data[field_key_index]);
-            }
-            else {
-              combined_data[i] = data[field_key_index];
-            }
-          }
-        });
+      // make sure there are replies for every cluster
+      const has_all_data = reply.every(cluster_data => {
+        return cluster_data;
       });
 
+      console.log('all data available in redis: ', has_all_data);
 
-      const evaluated = {};
+      if (has_all_data) {
 
-      // combined_data[0] index is arbitrary.  goal is just to loop through all geoids
-      // create a mini object where each object key is a field name.
-      // then solve the expression, and record the result in a master 'evaluated' object
-      Object.keys(combined_data[0]).forEach(geoid => {
-        const obj = {};
-        fields.forEach((field, i) => {
-          obj[field] = combined_data[i][geoid];
-        });
-        evaluated[geoid] = expr.evaluate(obj);
-
-      });
-
-
-      const data_by_cluster = {};
-
-      // divide into clusters
-      Object.keys(clusters_obj).forEach(cluster => {
-        //
-        if (!data_by_cluster[cluster]) {
-          data_by_cluster[cluster] = {};
-        }
-
-        clusters_obj[cluster].forEach(geoid => {
-          data_by_cluster[cluster][geoid] = evaluated[geoid];
+        const parsed_replay = reply.map(cluster_data => {
+          return JSON.parse(cluster_data);
         });
 
-      });
+        const results = Object.assign({}, ...parsed_replay);
+        console.log({ time: getTime(start_time), msg: 'sending redis data' });
+        return res.json(results);
+      }
 
-      // send to redis
+      // if we don't have all cluster data, will fall through to object below
 
-      // send back only the selected clusters
-      const array_of_objects = clusters.map(cluster => {
-        return data_by_cluster[cluster];
-      });
 
-      const results = Object.assign({}, ...array_of_objects);
+      console.log('uh oh');
 
-      console.log({ time: getTime(start_time), msg: 'parsed / sending data' });
+      const fields = Array.from(new Set(getFieldsFromExpression(expression)));
 
-      return res.json(results);
-      //
-    }).catch(err => {
-      console.log(err);
-      return res.status(500).json({ err });
-    });
+      const parser = new Parser();
+      const expr = parser.parse(expression.join(""));
 
-  });
+      console.log({ time: getTime(start_time), msg: 'fetching s3 data' });
 
-  // https://d0ahqlmxvi.execute-api.us-west-2.amazonaws.com/dev
-  // /retrieve?sumlev=050&cluster=0&expression=%5B%22B19013001%22%5D&dataset=acs1115 // TODO update
+      const url = getUrlFromDataset(dataset);
 
-  app.get("/old-retrieve", function(req, res) {
-    const start_time = present();
+      console.log({ time: getTime(start_time), msg: 'fetching url: ' + url });
 
-    const expression = req.query.expression ? JSON.parse(decodeURIComponent(req.query.expression)) : ["(", "(", "B01001007", "+", "B01001008", "+", "B01001009", "+", "B01001010", "+", "B01001031", "+", "B01001032", "+", "B01001033", "+", "B01001034", ")", "/", "B01001001", ")"];
-    const dataset = req.query.dataset || 'acs1115';
-    const sumlev = req.query.sumlev || '050';
-    const clusters = req.query.clusters ? JSON.parse(decodeURIComponent(req.query.clusters)) : ["0"];
+      const datas = [];
+      const fields_key = [];
 
-    // const expression = req.query.expression ? JSON.parse(decodeURIComponent(req.query.expression)) : ["B19013001"];
-    // const dataset = req.query.dataset || 'acs1115';
-    // const sumlev = req.query.sumlev || '150';
-    // const clusters = req.query.clusters ? JSON.parse(decodeURIComponent(req.query.clusters)) : ["0", "1", "2", "3"];
 
-    console.log({});
-    console.log({ sumlev, clusters, expression, dataset });
-
-    console.log({ time: 0, msg: 'start' });
-
-    const fields = Array.from(new Set(getFieldsFromExpression(expression)));
-
-    const parser = new Parser();
-    const expr = parser.parse(expression.join(""));
-
-    console.log({ time: getTime(start_time), msg: 'fetching s3 data' });
-
-    const url = getUrlFromDataset(dataset);
-
-    console.log({ time: getTime(start_time), msg: 'fetching url: ' + url });
-
-    const datas = [];
-    const fields_key = [];
-
-    clusters.forEach(cluster => {
       fields.forEach(field => {
         fields_key.push(field);
         datas.push(rp({
           method: 'get',
-          uri: `https://${url}/${field}/${sumlev}/${cluster}.json`,
+          uri: `https://${url}/${field}/${sumlev}.json`,
           headers: {
             'Accept-Encoding': 'gzip',
           },
@@ -235,57 +114,128 @@ const appRouter = function(app) {
           fullResponse: false
         }));
       });
-    });
 
+      console.log(fields_key);
 
-    Promise.all(datas).then(data => {
-      console.log({ time: getTime(start_time), msg: 'received all data' });
+      const geo_year = getGeoYearFromDataset(dataset);
+      const geog = getGeographyLevelFromSumlev(sumlev);
 
-      // shortcut when just one field
-      if (clusters.length === 1 && fields.length === 1) {
-        console.log({ time: getTime(start_time), msg: 'shortcut: sending data' });
-        return res.json(data[0]);
-      }
+      const geoid_lookup = rp({
+        method: 'get',
+        uri: `https://s3-us-west-2.amazonaws.com/geo-metadata/clusters_${geo_year}_${geog}.json`,
+        headers: {
+          'Accept-Encoding': 'gzip',
+        },
+        gzip: true,
+        json: true,
+        fullResponse: false
+      });
 
-      // combine clusters
-      const combined_data = [];
+      Promise.all([geoid_lookup, ...datas]).then(data => {
+        console.log({ time: getTime(start_time), msg: 'received all data' });
 
-      // create a data structure where combined_data indexes match fields indexes
-      fields_key.forEach((field_key, field_key_index) => {
-        fields.forEach((field, i) => {
-          if (field_key === field) {
-            if (combined_data[i]) {
-              combined_data[i] = Object.assign({}, combined_data[i], data[field_key_index]);
-            }
-            else {
-              combined_data[i] = data[field_key_index];
-            }
+        const geoid_lookup = data.shift();
+
+        // TODO geoid_lookup would be better as { CLUSTER: [ARRAY OF GEOIDS] }.
+        // in the meantime, we'll fake it by creating it here
+
+        console.log({ time: getTime(start_time), msg: 'needless compute start' });
+        const clusters_obj = {};
+
+        Object.keys(geoid_lookup).forEach(geoid => {
+          const cluster = geoid_lookup[geoid];
+          if (!clusters_obj[cluster]) {
+            clusters_obj[cluster] = [];
           }
+          clusters_obj[cluster].push(geoid);
         });
+        console.log({ time: getTime(start_time), msg: 'needless compute end' });
+
+
+        // we don't really need to get only a few clusters at a time.
+        // we can calculate all data, cluster it, save it to redis
+        // then pick just the initial selected clusters
+
+        // combine clusters
+        const combined_data = [];
+
+        // create a data structure where combined_data indexes match fields indexes
+        fields_key.forEach((field_key, field_key_index) => {
+          fields.forEach((field, i) => {
+            if (field_key === field) {
+              if (combined_data[i]) {
+                combined_data[i] = Object.assign({}, combined_data[i], data[field_key_index]);
+              }
+              else {
+                combined_data[i] = data[field_key_index];
+              }
+            }
+          });
+        });
+
+
+        const evaluated = {};
+
+        // combined_data[0] index is arbitrary.  goal is just to loop through all geoids
+        // create a mini object where each object key is a field name.
+        // then solve the expression, and record the result in a master 'evaluated' object
+        Object.keys(combined_data[0]).forEach(geoid => {
+          const obj = {};
+          fields.forEach((field, i) => {
+            obj[field] = combined_data[i][geoid];
+          });
+          evaluated[geoid] = expr.evaluate(obj);
+
+        });
+
+
+        const data_by_cluster = {};
+
+        // divide into clusters
+        Object.keys(clusters_obj).forEach(cluster => {
+          //
+          if (!data_by_cluster[cluster]) {
+            data_by_cluster[cluster] = {};
+          }
+
+          clusters_obj[cluster].forEach(geoid => {
+            data_by_cluster[cluster][geoid] = evaluated[geoid];
+          });
+
+        });
+
+        const redis_set_promises = [];
+        // send to redis
+        Object.keys(data_by_cluster).forEach(cluster => {
+          const key = `${dataset}:${theme}:${sumlev}:${cluster}`;
+          const pr = client.set(key, JSON.stringify(data_by_cluster[cluster]));
+          redis_set_promises.push(pr);
+        });
+
+        // wait until we're sure Redis has saved everything
+        Promise.all(redis_set_promises).then(() => {
+          // send back only the selected clusters
+          const array_of_objects = clusters.map(cluster => {
+            return data_by_cluster[cluster];
+          });
+
+          const results = Object.assign({}, ...array_of_objects);
+
+          console.log({ time: getTime(start_time), msg: 'parsed / sending data' });
+
+          return res.json(results);
+        });
+
+
+        //
+      }).catch(err => {
+        console.log(err);
+        return res.status(500).json({ err });
       });
 
-
-      const evaluated = {};
-
-      // combined_data[0] index is arbitrary.  goal is just to loop through all geoids
-      // create a mini object where each object key is a field name.
-      // then solve the expression, and record the result in a master 'evaluated' object
-      Object.keys(combined_data[0]).forEach(geoid => {
-        const obj = {};
-        fields.forEach((field, i) => {
-          obj[field] = combined_data[i][geoid];
-        });
-        evaluated[geoid] = expr.evaluate(obj);
-
-      });
-
-      console.log({ time: getTime(start_time), msg: 'parsed / sending data' });
-
-      return res.json(evaluated);
-      //
-    }).catch(err => {
-      return res.status(500).json({ err });
     });
+
+
 
   });
 
