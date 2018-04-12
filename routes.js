@@ -26,6 +26,17 @@ const appRouter = function(app) {
       return res.send(reply);
     });
 
+  });
+
+  app.get("/flush", function(req, res) {
+
+    client.flushdb(function(err, reply) {
+      if (err) {
+        console.log(err);
+        return res.json({ err });
+      }
+      return res.json({ response: 'cleared' });
+    });
 
   });
 
@@ -38,20 +49,23 @@ const appRouter = function(app) {
     // first run through, parses whole thing... all clusters, sends back only what was asked for and saves the rest to redis
 
     const theme = req.query.theme || 'mhi';
-    const expression = themes[theme].numerator;
+    const expression = req.query.expression ? JSON.parse(decodeURIComponent(req.query.expression)) : ["B19013001_moe"]; // themes[theme].numerator;
     const dataset = req.query.dataset || 'acs1216';
     const sumlev = req.query.sumlev || '140';
+    const e_or_m = req.query.moe ? 'm' : 'e';
     const clusters = req.query.clusters ? JSON.parse(decodeURIComponent(req.query.clusters)) : ["3_5"];
 
     console.log({});
-    console.log({ sumlev, clusters, expression, dataset });
+    console.log({ sumlev, clusters, expression, dataset, e_or_m });
 
     console.log({ time: 0, msg: 'start' });
 
-    // redis key will be dataset:theme:sumlev:cluster
+    // redis key will be dataset:theme:sumlev:e_or_m:cluster
     const redis_keys = clusters.map(cluster => {
-      return `${dataset}:${theme}:${sumlev}:${cluster}`;
+      return `${dataset}:${theme}:${sumlev}:${e_or_m}:${cluster}`;
     });
+
+    console.log({ redis_keys });
 
     // query redis for needed keys
     client.mget(redis_keys, function(err, reply) {
@@ -61,8 +75,6 @@ const appRouter = function(app) {
       }
 
       // reply is null when the key is missing
-      console.log(reply);
-
       // make sure there are replies for every cluster
       const has_all_data = reply.every(cluster_data => {
         return cluster_data;
@@ -82,9 +94,6 @@ const appRouter = function(app) {
       }
 
       // if we don't have all cluster data, will fall through to object below
-
-
-      console.log('uh oh');
 
       const fields = Array.from(new Set(getFieldsFromExpression(expression)));
 
@@ -115,7 +124,7 @@ const appRouter = function(app) {
         }));
       });
 
-      console.log(fields_key);
+      console.log({ fields_key });
 
       const geo_year = getGeoYearFromDataset(dataset);
       const geog = getGeographyLevelFromSumlev(sumlev);
@@ -207,7 +216,7 @@ const appRouter = function(app) {
         const redis_set_promises = [];
         // send to redis
         Object.keys(data_by_cluster).forEach(cluster => {
-          const key = `${dataset}:${theme}:${sumlev}:${cluster}`;
+          const key = `${dataset}:${theme}:${sumlev}:${e_or_m}:${cluster}`;
           const pr = client.set(key, JSON.stringify(data_by_cluster[cluster]));
           redis_set_promises.push(pr);
         });
