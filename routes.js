@@ -143,23 +143,7 @@ const appRouter = function(app) {
       Promise.all([geoid_lookup, ...datas]).then(data => {
         console.log({ time: getTime(start_time), msg: 'received all data' });
 
-        const geoid_lookup = data.shift();
-
-        // TODO geoid_lookup would be better as { CLUSTER: [ARRAY OF GEOIDS] }.
-        // in the meantime, we'll fake it by creating it here
-
-        console.log({ time: getTime(start_time), msg: 'needless compute start' });
-        const clusters_obj = {};
-
-        Object.keys(geoid_lookup).forEach(geoid => {
-          const cluster = geoid_lookup[geoid];
-          if (!clusters_obj[cluster]) {
-            clusters_obj[cluster] = [];
-          }
-          clusters_obj[cluster].push(geoid);
-        });
-        console.log({ time: getTime(start_time), msg: 'needless compute end' });
-
+        const clusters_obj = data.shift();
 
         // we don't really need to get only a few clusters at a time.
         // we can calculate all data, cluster it, save it to redis
