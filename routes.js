@@ -2,9 +2,11 @@
 
 const Parser = require('expr-eval').Parser;
 const present = require('present');
+const LZ = require('lz-string');
 const rp = require('request-promise');
 const { client } = require('./redis.js');
 const { themes } = require('./themes');
+const geojsonRbush = require('geojson-rbush').default;
 
 const geojson_container = {};
 
@@ -38,19 +40,13 @@ const appRouter = function(app) {
     const start_time = present();
     console.log({ time: 0, msg: 'start' });
 
-
     const theme = req.query.theme || 'mhi';
     const expression = req.query.expression ? JSON.parse(decodeURIComponent(req.query.expression)) : ["B19013001_moe"]; // themes[theme].numerator;
     const dataset = req.query.dataset || 'acs1216';
     const sumlev = req.query.sumlev || '140';
     const e_or_m = req.query.moe ? 'm' : 'e';
-    const clusters = req.query.clusters ? JSON.parse(decodeURIComponent(req.query.clusters)) : ["3_5"];
-
-    console.log({});
-    console.log({ sumlev, clusters, expression, dataset, e_or_m });
-
+    const completed_clusters = JSON.parse(LZ.decompressFromEncodedURIComponent(req.query.cluster_done_list));
     const url = getUrlFromDataset(dataset);
-
     const geo_year = getGeoYearFromDataset(dataset);
     const geog = getGeographyLevelFromSumlev(sumlev);
 
@@ -59,16 +55,16 @@ const appRouter = function(app) {
     const current_zoom = req.query.current_zoom;
     const current_bounds = JSON.parse(decodeURIComponent(req.query.current_bounds));
 
-    console.log({ pole_lat, pole_lng, current_zoom, current_bounds });
+    console.log({ time: getTime(start_time), msg: 'begin bounds calculation' });
 
     const current_sw = current_bounds._sw;
     const current_ne = current_bounds._ne;
     const lat_span = Math.abs(current_sw.lat - current_ne.lat);
     const lng_span = Math.abs(current_sw.lng - current_ne.lng);
-    console.log(lat_span, lng_span);
-
     const pct_along_lat = (pole_lat - current_sw.lat) / lat_span;
     const pct_along_lng = (pole_lng - current_sw.lng) / lng_span;
+
+    console.log({ sumlev, expression, dataset, e_or_m });
 
     const bounds_obj = {};
 
@@ -79,8 +75,29 @@ const appRouter = function(app) {
       const new_lng_span = lng_span * Math.pow(2, zoom_difference);
       const new_sw_lat = pole_lat - (pct_along_lat * new_lat_span);
       const new_ne_lat = pole_lat + ((1 - pct_along_lat) * new_lat_span);
-      const new_sw_lng = pole_lng - (pct_along_lng * new_lng_span);
-      const new_ne_lng = pole_lng + ((1 - pct_along_lng) * new_lng_span);
+      let new_sw_lng = pole_lng - (pct_along_lng * new_lng_span);
+      let new_ne_lng = pole_lng + ((1 - pct_along_lng) * new_lng_span);
+
+      // doesn't appear to be any issues with latitude out of bounds
+      // lng out of bounds below
+      if (new_sw_lng < -180) {
+        console.log({ time: getTime(start_time), msg: 'wrapping new_sw_lng' });
+        new_sw_lng = new_sw_lng + 360;
+      }
+      if (new_sw_lng > 180) {
+        console.log({ time: getTime(start_time), msg: 'wrapping new_sw_lng (RARE!)' });
+        new_sw_lng = new_sw_lng - 360; // rare to impossible
+      }
+
+      if (new_ne_lng < -180) {
+        console.log({ time: getTime(start_time), msg: 'wrapping new_ne_lng (RARE!)' });
+        new_ne_lng = new_ne_lng + 360; // rare to impossible
+      }
+      if (new_ne_lng > 180) {
+        console.log({ time: getTime(start_time), msg: 'wrapping new_ne_lng' });
+        new_ne_lng = new_ne_lng - 360;
+      }
+
 
       bounds_obj[new_zoom] = [
         [new_sw_lng, new_sw_lat],
@@ -89,14 +106,17 @@ const appRouter = function(app) {
 
     });
 
-    if (geojson_container[geog]) {
-      console.log('retriving geo cluster data from cache');
+    console.log({ time: getTime(start_time), msg: 'end bounds calculation' });
+
+
+    if (geojson_container[`${geo_year}_${geog}`]) {
+      console.log({ time: getTime(start_time), msg: 'begin retriving geo cluster data from cache' });
     }
     else {
-      console.log('loading geo cluster data from S3');
+      console.log({ time: getTime(start_time), msg: 'begin retriving geo cluster data from S3' });
     }
 
-    const geojson = !geojson_container[geog] ? rp({
+    const geojson = !geojson_container[`${geo_year}_${geog}`] ? rp({
       method: 'get',
       uri: `https://s3-us-west-2.amazonaws.com/v2-cluster-json/clusters_${geo_year}_${geog}.json`,
       headers: {
@@ -105,26 +125,96 @@ const appRouter = function(app) {
       gzip: true,
       json: true,
       fullResponse: false
-    }) : Promise.resolve(geojson_container[geog]);
+    }) : Promise.resolve(false);
 
     return geojson.then(data => {
-      geojson_container[geog] = data;
+      console.log({ time: getTime(start_time), msg: 'geo cluster data retrieved' });
 
-      return res.json(data);
-    });
+      let tree;
+
+      // get the spatial index either from the cache or create it from the loaded geojson
+      if (!data) {
+        tree = geojson_container[`${geo_year}_${geog}`];
+        console.log({ time: getTime(start_time), msg: 'index tree available - from cache' });
+      }
+      else {
+        tree = geojsonRbush();
+        tree.load(data);
+        geojson_container[`${geo_year}_${geog}`] = tree;
+        console.log({ time: getTime(start_time), msg: 'index tree available - computed' });
+      }
 
 
-    // todo bbox query
+      console.log({ time: getTime(start_time), msg: 'begin find clusters geosearch' });
 
-    // todo sanitize out of coordinate bounds (over 180 degrees lng, 90 lat)
+      const cluster_candidates = [];
 
-    // deal with already sent clusters
+      Object.keys(bounds_obj).forEach(bounds => {
+
+        const rect = bounds_obj[bounds];
+        const geo = {
+          "type": "FeatureCollection",
+          "features": [{
+            "type": "Feature",
+            "properties": {},
+            "geometry": {
+              "type": "Polygon",
+              "coordinates": [
+                [
+                  [rect[0][0],
+                    rect[0][1]
+                  ],
+                  [rect[1][0],
+                    rect[0][1]
+                  ],
+                  [rect[1][0],
+                    rect[1][1]
+                  ],
+                  [rect[0][0],
+                    rect[1][1]
+                  ],
+                  [rect[0][0],
+                    rect[0][1]
+                  ]
+                ]
+              ]
+            }
+          }]
+        };
+
+        const intersecting = tree.search(geo);
+
+        const clusters_all = intersecting.features.map(feature => {
+          return feature.properties.cluster;
+        });
+
+        const matching = clusters_all.filter(cluster_string => {
+          return cluster_string.split('_')[0] === bounds;
+        });
+
+        matching.forEach(match => {
+          cluster_candidates.push(match);
+        });
+
+      });
 
 
+      // filter out clusters already processed
+      const clusters = cluster_candidates.filter(candidate => {
+        return !completed_clusters.includes(candidate);
+      });
 
-    // first run through, parses whole thing... all clusters, sends back only what was asked for and saves the rest to redis
+      console.log({ time: getTime(start_time), msg: 'all clusters found' });
 
-    function forget() {
+
+      // make sure there are no clusters to process...else early exit
+      if (!clusters.length) {
+        console.log({ time: getTime(start_time), msg: 'client has all the data it needs' });
+        return res.json({ data: {}, clusters: [] });
+      }
+
+
+      // first run through, parses whole thing... all clusters, sends back only what was asked for and saves the rest to redis
 
 
       // redis key will be dataset:theme:sumlev:e_or_m:cluster
@@ -132,10 +222,12 @@ const appRouter = function(app) {
         return `${dataset}:${theme}:${sumlev}:${e_or_m}:${cluster}`;
       });
 
-      console.log({ redis_keys });
+      console.log({ time: getTime(start_time), msg: 'begin REDIS lookup' });
 
       // query redis for needed keys
       client.mget(redis_keys, function(err, reply) {
+        console.log({ time: getTime(start_time), msg: 'REDIS data retrieved' });
+
         if (err) {
           console.log(err);
           return res.json({ err: 'error' });
@@ -157,7 +249,7 @@ const appRouter = function(app) {
 
           const results = Object.assign({}, ...parsed_replay);
           console.log({ time: getTime(start_time), msg: 'sending redis data' });
-          return res.json(results);
+          return res.json({ data: results, clusters });
         }
 
         // if we don't have all cluster data, will fall through to object below
@@ -277,7 +369,7 @@ const appRouter = function(app) {
 
             console.log({ time: getTime(start_time), msg: 'parsed / sending data' });
 
-            return res.json(results);
+            return res.json({ data: results, clusters });
           });
 
 
@@ -289,7 +381,9 @@ const appRouter = function(app) {
 
       });
 
-    }
+
+    });
+
 
   });
 
