@@ -40,10 +40,10 @@ const appRouter = function(app) {
     const start_time = present();
     console.log({ time: 0, msg: 'start' });
 
-    const theme = req.query.theme || 'mhi';
-    const expression = req.query.expression ? JSON.parse(decodeURIComponent(req.query.expression)) : ["B19013001_moe"]; // themes[theme].numerator;
-    const dataset = req.query.dataset || 'acs1216';
-    const sumlev = req.query.sumlev || '140';
+    const theme = req.query.theme;
+    const expression = JSON.parse(decodeURIComponent(req.query.expression));
+    const dataset = req.query.dataset;
+    const sumlev = req.query.sumlev;
     const e_or_m = req.query.moe ? 'm' : 'e';
     const completed_clusters = JSON.parse(LZ.decompressFromEncodedURIComponent(req.query.cluster_done_list));
     const url = getUrlFromDataset(dataset);
