@@ -37,6 +37,7 @@ const appRouter = function(app) {
   // /new-retrieve?sumlev=140&cluster=0&expression=%5B%22B01001001%22%5D&dataset=acs1216
 
   app.get("/retrieve", function(req, res) {
+    console.log(process.env.REDIS_PWRD);
     const start_time = present();
     console.log({ time: 0, msg: 'start' });
 
@@ -147,7 +148,7 @@ const appRouter = function(app) {
 
       console.log({ time: getTime(start_time), msg: 'begin find clusters geosearch' });
 
-      const cluster_candidates = [];
+      const cluster_candidates = new Set();
 
       Object.keys(bounds_obj).forEach(bounds => {
 
@@ -188,19 +189,42 @@ const appRouter = function(app) {
           return feature.properties.cluster;
         });
 
-        const matching = clusters_all.filter(cluster_string => {
-          return cluster_string.split('_')[0] === bounds;
+        console.log('clusters_all');
+        console.log(clusters_all);
+
+        console.log({ bounds });
+
+        const matching = clusters_all.filter(cluster => {
+          if (typeof cluster === 'number') {
+            // a sumlev that does not have zoom level specific clusters
+            // (state, county)
+            return true;
+          }
+          else if (typeof cluster === 'string') {
+            // the _ separates the zoom level from the cluster number
+            return cluster.split('_')[0] === bounds;
+          }
+          else {
+            console.log('unexpected type', typeof cluster, cluster);
+          }
+
+
         });
 
         matching.forEach(match => {
-          cluster_candidates.push(match);
+          cluster_candidates.add(match);
         });
 
       });
 
+      console.log('cluster candidates');
+      console.log(cluster_candidates);
+
+      console.log('completed clusters');
+      console.log(completed_clusters);
 
       // filter out clusters already processed
-      const clusters = cluster_candidates.filter(candidate => {
+      const clusters = Array.from(cluster_candidates).filter(candidate => {
         return !completed_clusters.includes(candidate);
       });
 
