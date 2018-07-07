@@ -5,7 +5,6 @@ const present = require('present');
 const LZ = require('lz-string');
 const rp = require('request-promise');
 const { client } = require('./redis.js');
-const { themes } = require('./themes');
 const geojsonRbush = require('geojson-rbush').default;
 
 const geojson_container = {};
@@ -37,7 +36,7 @@ const appRouter = function(app) {
   // /new-retrieve?sumlev=140&cluster=0&expression=%5B%22B01001001%22%5D&dataset=acs1216
 
   app.get("/retrieve", function(req, res) {
-    console.log(process.env.REDIS_PWRD);
+
     const start_time = present();
     console.log({ time: 0, msg: 'start' });
 
@@ -82,21 +81,21 @@ const appRouter = function(app) {
       // doesn't appear to be any issues with latitude out of bounds
       // lng out of bounds below
       if (new_sw_lng < -180) {
-        console.log({ time: getTime(start_time), msg: 'wrapping new_sw_lng' });
-        new_sw_lng = new_sw_lng + 360;
+        console.log({ time: getTime(start_time), msg: 'clamping new_sw_lng' });
+        new_sw_lng = -180;
       }
       if (new_sw_lng > 180) {
-        console.log({ time: getTime(start_time), msg: 'wrapping new_sw_lng (RARE!)' });
-        new_sw_lng = new_sw_lng - 360; // rare to impossible
+        console.log({ time: getTime(start_time), msg: 'clamping new_sw_lng (RARE!)' });
+        new_sw_lng = 180; // rare to impossible
       }
 
       if (new_ne_lng < -180) {
-        console.log({ time: getTime(start_time), msg: 'wrapping new_ne_lng (RARE!)' });
-        new_ne_lng = new_ne_lng + 360; // rare to impossible
+        console.log({ time: getTime(start_time), msg: 'clamping new_ne_lng (RARE!)' });
+        new_ne_lng = -180; // rare to impossible
       }
       if (new_ne_lng > 180) {
-        console.log({ time: getTime(start_time), msg: 'wrapping new_ne_lng' });
-        new_ne_lng = new_ne_lng - 360;
+        console.log({ time: getTime(start_time), msg: 'clamping new_ne_lng' });
+        new_ne_lng = 180;
       }
 
 
@@ -189,10 +188,6 @@ const appRouter = function(app) {
           return feature.properties.cluster;
         });
 
-        console.log('clusters_all');
-        console.log(clusters_all);
-
-        console.log({ bounds });
 
         const matching = clusters_all.filter(cluster => {
           if (typeof cluster === 'number') {
@@ -217,11 +212,6 @@ const appRouter = function(app) {
 
       });
 
-      console.log('cluster candidates');
-      console.log(cluster_candidates);
-
-      console.log('completed clusters');
-      console.log(completed_clusters);
 
       // filter out clusters already processed
       const clusters = Array.from(cluster_candidates).filter(candidate => {
@@ -231,7 +221,7 @@ const appRouter = function(app) {
       console.log({ time: getTime(start_time), msg: 'all clusters found' });
 
 
-      // make sure there are no clusters to process...else early exit
+      // make sure there are clusters to process...else early exit
       if (!clusters.length) {
         console.log({ time: getTime(start_time), msg: 'client has all the data it needs' });
         return res.json({ data: {}, clusters: [] });
